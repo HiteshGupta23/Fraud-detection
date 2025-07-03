@@ -85,6 +85,7 @@ with col_button:
             prediction = model.predict(input_df)
             prediction_proba = model.predict_proba(input_df)
 
+            # --- Display Results ---
             st.subheader("Fraud Analysis Result")
             if prediction[0] == 1:
                 st.error("High Risk: This transaction is likely FRAUDULENT!", icon="🚨")
@@ -93,21 +94,22 @@ with col_button:
 
             fraud_probability = prediction_proba[0][1]
             st.metric(label="Fraud Probability Score", value=f"{fraud_probability:.2%}")
+            st.progress(float(fraud_probability))
             
             # --- THE FIX IS HERE ---
-            st.progress(float(fraud_probability))
+            # Removed the st.expander for a direct display
+            st.divider()
+            st.subheader("Detailed Analysis")
+            st.write("**Prediction Probabilities:**")
+            st.write(f"- Legitimate: `{prediction_proba[0][0]:.2%}`")
+            st.write(f"- Fraudulent: `{prediction_proba[0][1]:.2%}`")
+            st.write("**Final Data Sent to Model (Fully Preprocessed):**")
+            st.dataframe(input_df, use_container_width=True) # use_container_width makes it stretch
             # -----------------------
-
-            with st.expander("See Detailed Analysis"):
-                st.write("Prediction Probabilities:")
-                st.write(f"- Legitimate: {prediction_proba[0][0]:.2%}")
-                st.write(f"- Fraudulent: {prediction_proba[0][1]:.2%}")
-                st.write("---")
-                st.write("Final Data Sent to Model (Fully Preprocessed):")
-                st.dataframe(input_df)
 
 # --- How It Works Section ---
 st.markdown("---")
+# This can also be removed if you feel the app is self-explanatory now
 with st.expander("How does this app work?"):
     st.markdown("""
     1.  **Input Data**: You provide the raw transaction details.
