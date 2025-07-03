@@ -10,6 +10,19 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- Define the exact column order the model was trained on ---
+# This is the most critical part of the fix.
+MODEL_COLUMN_ORDER = [
+    'txn_type',
+    'txn_amount',
+    'sender_balance_before',
+    'sender_balance_after',
+    'receiver_balance_before',
+    'receiver_balance_after',
+    'sender_balance_error',
+    'receiver_balance_error'
+]
+
 # --- Caching the Model ---
 @st.cache_resource
 def load_model():
@@ -38,10 +51,7 @@ st.subheader("Enter Transaction Details to Analyze 💳")
 col1, col2 = st.columns(2)
 
 with col1:
-    txn_type = st.selectbox(
-        'Transaction Type',
-        ('PAYMENT', 'CASH_OUT', 'TRANSFER', 'CASH_IN', 'DEBIT')
-    )
+    txn_type = st.selectbox('Transaction Type', ('PAYMENT', 'CASH_OUT', 'TRANSFER', 'CASH_IN', 'DEBIT'))
     sender_balance_before = st.number_input('Sender Balance Before', min_value=0.0, format="%.2f")
     receiver_balance_before = st.number_input('Receiver Balance Before', min_value=0.0, format="%.2f")
 
@@ -57,33 +67,30 @@ _, col_button, _ = st.columns([2, 1, 2])
 with col_button:
     if st.button("Analyze Transaction", use_container_width=True):
         if model is not None:
-            # 1. Create a dictionary from the user's raw input
-            input_data = {
+            # 1. Create a DataFrame from the user's raw input
+            input_df = pd.DataFrame([{
                 'txn_type': txn_type,
                 'txn_amount': txn_amount,
                 'sender_balance_before': sender_balance_before,
                 'sender_balance_after': sender_balance_after,
                 'receiver_balance_before': receiver_balance_before,
                 'receiver_balance_after': receiver_balance_after,
-            }
-
-            # 2. Convert to a DataFrame
-            input_df = pd.DataFrame([input_data])
+            }])
             
-            # --- THIS IS THE CRUCIAL FIX ---
-            # 3. Engineer the features just like in the notebook
+            # 2. Engineer the new features
             input_df['sender_balance_error'] = input_df['sender_balance_after'] + input_df['txn_amount'] - input_df['sender_balance_before']
             input_df['receiver_balance_error'] = input_df['receiver_balance_after'] - input_df['txn_amount'] - input_df['receiver_balance_before']
-            # -------------------------------
+            
+            # 3. *** THE CRUCIAL FIX: Enforce the correct column order ***
+            input_df = input_df[MODEL_COLUMN_ORDER]
 
             # 4. Make Prediction
-            # The model now receives the data in the exact format it was trained on
             prediction = model.predict(input_df)
             prediction_proba = model.predict_proba(input_df)
 
             # --- Display Results ---
             st.subheader("Fraud Analysis Result")
-            
+            # ... (rest of the display logic is the same) ...
             if prediction[0] == 1:
                 st.error("High Risk: This transaction is likely FRAUDULENT!", icon="🚨")
             else:
@@ -98,15 +105,16 @@ with col_button:
                 st.write(f"- Legitimate: {prediction_proba[0][0]:.2%}")
                 st.write(f"- Fraudulent: {prediction_proba[0][1]:.2%}")
                 st.write("---")
-                st.write("Data Sent to Model (after feature engineering):")
+                st.write("Data Sent to Model (Reordered & Engineered):")
                 st.dataframe(input_df)
 
 # --- How It Works Section ---
+# ... (rest of the app is the same) ...
 st.markdown("---")
 with st.expander("How does this app work?"):
     st.markdown("""
     1.  **Input Data**: You provide the details of a financial transaction.
-    2.  **Feature Engineering**: The app first calculates the `_balance_error` features, which are highly predictive of fraud.
-    3.  **Data Transformation**: This complete DataFrame (with engineered features) is then fed into the saved pipeline. The pipeline automatically handles scaling and one-hot encoding.
-    4.  **Prediction**: The fully processed data is passed to the trained XGBoost model, which outputs a fraud probability score.
+    2.  **Feature Engineering**: The app first calculates the `_balance_error` features.
+    3.  **Data Structuring**: The app then **reorders the columns** to precisely match the structure the model was trained on. This is a critical step.
+    4.  **Transformation & Prediction**: This complete DataFrame is fed into the saved pipeline, which handles scaling, encoding, and finally, prediction.
     """)
